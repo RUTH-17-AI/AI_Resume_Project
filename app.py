@@ -1,52 +1,49 @@
 import streamlit as st
-import pandas as pd
-from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics.pairwise import cosine_similarity
+import fitz
 
-# Set page title and icon
-st.set_page_config(page_title="Movie Recommender", page_icon="🎬")
+st.set_page_config(page_title="AI Resume Analyzer", layout="centered")
 
-# App title
-st.title("🎬 Movie Recommendation System")
+st.title("📄 AI Resume Analyzer")
+st.write("Upload your Resume and Job Description to calculate ATS score.")
 
-# Info
-st.markdown("""
-Welcome to the movie recommender!  
-Enter a movie name below to get similar movie suggestions.  
-Try movies like **Avatar**, **The Dark Knight**, etc.
-""")
+def extract_text(file):
+    doc = fitz.open(stream=file.read(), filetype="pdf")
+    text = ""
+    for page in doc:
+        text += page.get_text()
+    return text.lower()
 
-# Load dataset
-movies_df = pd.read_csv("movie_dataset.csv")  # Make sure this file is in the same folder
+skills_list = [
+    "python","java","c","sql","html","css","javascript","machine learning",
+    "deep learning","nlp","tensorflow","keras","pandas","numpy","power bi",
+    "flask","opencv","streamlit"
+]
 
-# Replace missing descriptions with empty string
-movies_df['description'] = movies_df['description'].fillna('')
+resume_file = st.file_uploader("Upload Resume (PDF)", type=["pdf"])
+jd_file = st.file_uploader("Upload Job Description (PDF)", type=["pdf"])
 
-# Convert descriptions to feature vectors
-vectorizer = TfidfVectorizer(stop_words='english')
-tfidf_matrix = vectorizer.fit_transform(movies_df['description'])
+if resume_file and jd_file:
+    resume_text = extract_text(resume_file)
+    jd_text = extract_text(jd_file)
 
-# Compute similarity scores
-cosine_sim = cosine_similarity(tfidf_matrix, tfidf_matrix)
+    resume_skills = set([s for s in skills_list if s in resume_text])
+    jd_skills = set([s for s in skills_list if s in jd_text])
 
-# Recommendation function
-def recommend_movie(title):
-    try:
-        idx = movies_df[movies_df['title'].str.lower() == title.lower()].index[0]
-    except IndexError:
-        return ["❌ Movie not found. Please try another title."]
-    
-    sim_scores = list(enumerate(cosine_sim[idx]))
-    sim_scores = sorted(sim_scores, key=lambda x: x[1], reverse=True)
-    sim_scores = sim_scores[1:6]
-    movie_indices = [i[0] for i in sim_scores]
-    return movies_df['title'].iloc[movie_indices].tolist()
+    match = resume_skills & jd_skills
+    missing = jd_skills - resume_skills
 
-# Input box
-movie_input = st.text_input("Enter a Movie Title:")
+    score = int((len(match) / len(jd_skills)) * 100) if jd_skills else 0
 
-# Show recommendations
-if movie_input:
-    st.subheader("🎯 Recommended Movies:")
-    for movie in recommend_movie(movie_input):
-        st.write("🎥", movie)
+    st.subheader("🧠 Resume Skills Detected")
+    st.write(list(resume_skills))
+
+    st.subheader("💼 Job Skills Detected")
+    st.write(list(jd_skills))
+
+    st.subheader("✅ ATS Score & Analysis")
+    st.write("Matching Skills:", match)
+    st.write("Missing Skills:", list(missing))
+    st.metric("ATS Score", f"{score} / 100")
+
+    st.subheader("💡 Suggested Skills to Learn")
+    st.write(list(missing))
